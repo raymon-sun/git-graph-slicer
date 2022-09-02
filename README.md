@@ -1,1 +1,1 @@
-# git-graph
+# git-graph-slicer
