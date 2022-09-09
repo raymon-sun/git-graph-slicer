@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Commit {
     hash: String,
     ref_names: Vec<String>,
@@ -11,7 +12,20 @@ struct Commit {
     author_email: String,
     author_name: String,
     author_date: String,
-    graph: Vec<GraphSlice>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphicCommit {
+    hash: String,
+    ref_names: Vec<String>,
+    message: String,
+    parents: Vec<String>,
+    commit_date: String,
+    author_email: String,
+    author_name: String,
+    author_date: String,
+    graph: GraphSlice,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -21,11 +35,18 @@ struct GraphSlice {
     lines: Vec<CommitGraphLine>,
 }
 
+#[derive(Clone)]
 #[derive(Serialize, Deserialize)]
 struct CommitGraphLine {
     top: u32,
     bottom: u32,
     color: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Example {
+    pub field2: Vec<Vec<f32>>,
+    pub field3: [f32; 4],
 }
 
 #[wasm_bindgen]
@@ -40,29 +61,38 @@ pub fn greet(name: &str) {
 
 #[wasm_bindgen]
 pub fn attach_graph(val: JsValue) -> JsValue {
-    let commits: Vec<Commit> = serde_wasm_bindgen::from_value(val).unwrap();
+    let original_commits: Vec<Commit> = serde_wasm_bindgen::from_value(val).unwrap();
 
-    commits.iter().map(|commit| attach_graph_slice(commit));
+    let mut pre_lines: Vec<CommitGraphLine> = Vec::new();
+    let commits: Vec<GraphicCommit> = original_commits
+        .into_iter()
+        .map(|commit| {
+            let hash = &commit.hash;
+            let parents = &commit.parents;
+            let graph_slice = slice_graph(hash, parents, &pre_lines);
+            pre_lines = graph_slice.lines.clone();
+
+            GraphicCommit {
+                hash: hash.clone(),
+                ref_names: commit.ref_names,
+                message: commit.message,
+                parents: parents.clone(),
+                commit_date: commit.commit_date,
+                author_email: commit.author_email,
+                author_name: commit.author_name,
+                author_date: commit.author_date,
+                graph: graph_slice,
+            }
+        })
+        .collect();
 
     serde_wasm_bindgen::to_value(&commits).unwrap()
 }
 
-fn attach_graph_slice(original_commit: &Commit) -> Commit {
-    let commit =  Commit {
-        hash: original_commit.hash.clone(),
-        ref_names: original_commit.ref_names.clone(),
-        message: original_commit.message.clone(),
-        parents: original_commit.parents.clone(),
-        commit_date: original_commit.commit_date.clone(),
-        author_email: original_commit.author_email.clone(),
-        author_name: original_commit.author_name.clone(),
-        author_date: original_commit.author_date.clone(),
-        graph : vec![GraphSlice {
-            commit_position: 0,
-            commit_color: "".to_string(),
-            lines: vec![],
-        }]
-    };
-
-    commit
+fn slice_graph(hash: &String, parents: &Vec<String>, pre_lines: &Vec<CommitGraphLine>) -> GraphSlice {
+    GraphSlice {
+        commit_position: 0,
+        commit_color: "".to_string(),
+        lines: Vec::new(),
+    }
 }
