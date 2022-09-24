@@ -114,6 +114,27 @@ fn slice_graph(
     let index_list = get_index_list(chains, hash);
     if index_list.len().eq(&0) {
         // TIPS: first node of a chain
+        commit_color = String::from("red");
+        commit_position = chains.len() as u32;
+
+        // TODO: if first_parent == None
+        if parents.len() > 0 {
+            chains.push(Chain {
+                hash: hash.clone(),
+                parent: first_parent.clone(),
+                color: commit_color.clone(),
+            });
+        }
+
+        lines.push(CommitGraphLine {
+            top: -1,
+            bottom: if parents.len() > 0 {
+                chains.len() as i32 - 1i32
+            } else {
+                -1
+            },
+            color: commit_color.clone(),
+        })
     } else {
         // TIPS: not first node of a chain
         let first_index = index_list[0];
@@ -152,13 +173,40 @@ fn slice_graph(
                     }
                 })
                 .collect()
-        } else {
         }
     }
 
+    fork_parents.into_iter().for_each(|parent| {
+        let has_same_parent = chains.into_iter().any(|chain| chain.parent.eq(parent));
+        if has_same_parent {
+            let index_list = get_index_list(chains, parent);
+            if index_list.len() > 0 {
+                let first_index = index_list[0];
+                lines.push(CommitGraphLine {
+                    top: -1,
+                    bottom: first_index as i32,
+                    color: chains[first_index].color.clone(),
+                })
+            }
+        } else {
+            commit_color = String::from("red");
+            chains.push(Chain {
+                hash: hash.clone(),
+                parent: parent.clone(),
+                color: commit_color.clone(),
+            });
+
+            lines.push(CommitGraphLine {
+                top: -1,
+                bottom: chains.len() as i32 - 1,
+                color: commit_color.clone(),
+            })
+        }
+    });
+
     GraphSlice {
-        commit_position: 0,
-        commit_color: "".to_string(),
+        commit_position: commit_position,
+        commit_color: commit_color,
         lines: lines,
     }
 }
