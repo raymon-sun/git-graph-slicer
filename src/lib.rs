@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -68,14 +70,14 @@ pub fn greet(name: &str) {
 pub fn attach_graph(val: JsValue) -> JsValue {
     let original_commits: Vec<Commit> = serde_wasm_bindgen::from_value(val).unwrap();
 
-    let cur_chains: Vec<Chain> = Vec::new();
+    let mut cur_chains: Vec<Chain> = Vec::new();
     let mut pre_lines: Vec<CommitGraphLine> = Vec::new();
     let commits: Vec<GraphicCommit> = original_commits
         .into_iter()
         .map(|commit| {
             let hash = &commit.hash;
             let parents = &commit.parents;
-            let graph_slice = slice_graph(hash, parents, &pre_lines, &cur_chains);
+            let graph_slice = slice_graph(hash, parents, &pre_lines, &mut cur_chains);
             pre_lines = graph_slice.lines.clone();
 
             GraphicCommit {
@@ -99,19 +101,65 @@ fn slice_graph(
     hash: &String,
     parents: &Vec<String>,
     pre_lines: &Vec<CommitGraphLine>,
-    chains: &Vec<Chain>,
+    chains: &mut Vec<Chain>,
 ) -> GraphSlice {
-    let lines = get_current_lines(pre_lines);
+    let mut lines = get_current_lines(pre_lines);
 
-    let firstParent = &parents[0];
-    let forkParents = &parents[1..];
+    let first_parent = &parents[0];
+    let fork_parents = &parents[1..];
+
+    let mut commit_position: u32;
+    let mut commit_color: String;
 
     let index_list = get_index_list(chains, hash);
+    if index_list.len().eq(&0) {
+        // TIPS: first node of a chain
+    } else {
+        // TIPS: not first node of a chain
+        let first_index = index_list[0];
+        let other_index_list = &index_list[1..];
+
+        commit_position = first_index as u32;
+        commit_color = chains[first_index as usize].color.clone();
+
+        let merged_index_list = if parents.len() != 0 {
+            other_index_list
+        } else {
+            &index_list
+        };
+
+        if merged_index_list.len() != 0 {
+            remove_merged_chains_by_indexes(chains, merged_index_list);
+
+            let mut bottom_index = -1;
+            lines = lines
+                .into_iter()
+                .enumerate()
+                .map(|(index, mut line)| {
+                    if merged_index_list.contains(&index) {
+                        CommitGraphLine {
+                            top: line.top,
+                            bottom: -1,
+                            color: line.color.clone(),
+                        }
+                    } else {
+                        bottom_index = bottom_index + 1;
+                        CommitGraphLine {
+                            top: line.top,
+                            bottom: bottom_index,
+                            color: line.color.clone(),
+                        }
+                    }
+                })
+                .collect()
+        } else {
+        }
+    }
 
     GraphSlice {
         commit_position: 0,
         commit_color: "".to_string(),
-        lines,
+        lines: lines,
     }
 }
 
@@ -136,14 +184,23 @@ fn get_current_lines(pre_lines: &Vec<CommitGraphLine>) -> Vec<CommitGraphLine> {
         .collect::<Vec<CommitGraphLine>>()
 }
 
-fn get_index_list(chains: &Vec<Chain>, hash: &String) -> Vec<u32> {
-    let mut index_list: Vec<u32> = Vec::new();
+fn get_index_list(chains: &Vec<Chain>, hash: &String) -> Vec<usize> {
+    let mut index_list: Vec<usize> = Vec::new();
 
     chains.into_iter().enumerate().for_each(|(index, chain)| {
         if chain.parent.eq(hash) {
-            index_list.push(index as u32);
+            index_list.push(index as usize);
         }
     });
 
     index_list
+}
+
+fn remove_merged_chains_by_indexes(chains: &mut Vec<Chain>, merged_index_list: &[usize]) {
+    let mut index = 0usize;
+    chains.retain(|_| {
+        let is_merged_chain = merged_index_list.contains(&index);
+        index = index + 1;
+        !is_merged_chain
+    });
 }
