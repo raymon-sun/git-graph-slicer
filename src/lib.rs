@@ -1,7 +1,7 @@
-use std::ops::Index;
-
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+
+extern crate web_sys;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +31,7 @@ struct GraphicCommit {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct GraphSlice {
     commit_position: u32,
     commit_color: String,
@@ -105,10 +106,11 @@ fn slice_graph(
 ) -> GraphSlice {
     let mut lines = get_current_lines(pre_lines);
 
-    let first_parent = &parents[0];
-    let fork_parents = &parents[1..];
+    let first_parent = parents.get(0);
+    let fork_parents = parents.get(1..);
+    web_sys::console::log_1(&"handle parents!".into());
 
-    let mut commit_position: u32;
+    let commit_position: u32;
     let mut commit_color: String;
 
     let index_list = get_index_list(chains, hash);
@@ -118,10 +120,10 @@ fn slice_graph(
         commit_position = chains.len() as u32;
 
         // TODO: if first_parent == None
-        if parents.len() > 0 {
+        if first_parent.is_some() {
             chains.push(Chain {
                 hash: hash.clone(),
-                parent: first_parent.clone(),
+                parent: first_parent.as_deref().unwrap().to_string(),
                 color: commit_color.clone(),
             });
         }
@@ -156,7 +158,7 @@ fn slice_graph(
             lines = lines
                 .into_iter()
                 .enumerate()
-                .map(|(index, mut line)| {
+                .map(|(index, line)| {
                     if merged_index_list.contains(&index) {
                         CommitGraphLine {
                             top: line.top,
@@ -176,33 +178,39 @@ fn slice_graph(
         }
     }
 
-    fork_parents.into_iter().for_each(|parent| {
-        let has_same_parent = chains.into_iter().any(|chain| chain.parent.eq(parent));
-        if has_same_parent {
-            let index_list = get_index_list(chains, parent);
-            if index_list.len() > 0 {
-                let first_index = index_list[0];
-                lines.push(CommitGraphLine {
-                    top: -1,
-                    bottom: first_index as i32,
-                    color: chains[first_index].color.clone(),
-                })
-            }
-        } else {
-            commit_color = String::from("red");
-            chains.push(Chain {
-                hash: hash.clone(),
-                parent: parent.clone(),
-                color: commit_color.clone(),
-            });
+    if fork_parents.is_some() {
+        fork_parents
+            .as_deref()
+            .unwrap()
+            .into_iter()
+            .for_each(|parent| {
+                let has_same_parent = chains.into_iter().any(|chain| chain.parent.eq(parent));
+                if has_same_parent {
+                    let index_list = get_index_list(chains, parent);
+                    if index_list.len() > 0 {
+                        let first_index = index_list[0];
+                        lines.push(CommitGraphLine {
+                            top: -1,
+                            bottom: first_index as i32,
+                            color: chains[first_index].color.clone(),
+                        })
+                    }
+                } else {
+                    commit_color = String::from("red");
+                    chains.push(Chain {
+                        hash: hash.clone(),
+                        parent: parent.clone(),
+                        color: commit_color.clone(),
+                    });
 
-            lines.push(CommitGraphLine {
-                top: -1,
-                bottom: chains.len() as i32 - 1,
-                color: commit_color.clone(),
-            })
-        }
-    });
+                    lines.push(CommitGraphLine {
+                        top: -1,
+                        bottom: chains.len() as i32 - 1,
+                        color: commit_color.clone(),
+                    })
+                }
+            });
+    }
 
     GraphSlice {
         commit_position: commit_position,
