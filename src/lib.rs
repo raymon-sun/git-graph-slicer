@@ -1,7 +1,10 @@
+use color_picker::ColorPicker;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 extern crate web_sys;
+
+mod color_picker;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,7 +50,7 @@ struct CommitGraphLine {
 #[derive(Clone, Serialize, Deserialize)]
 struct Chain {
     hash: String,
-    parent: String,
+    parent: Option<String>,
     color: String,
 }
 
@@ -73,12 +76,20 @@ pub fn attach_graph(val: JsValue) -> JsValue {
 
     let mut cur_chains: Vec<Chain> = Vec::new();
     let mut pre_lines: Vec<CommitGraphLine> = Vec::new();
+    let mut color_picker = color_picker::ColorPicker::new();
+
     let commits: Vec<GraphicCommit> = original_commits
         .into_iter()
         .map(|commit| {
             let hash = &commit.hash;
             let parents = &commit.parents;
-            let graph_slice = slice_graph(hash, parents, &pre_lines, &mut cur_chains);
+            let graph_slice = slice_graph(
+                hash,
+                parents,
+                &pre_lines,
+                &mut cur_chains,
+                &mut color_picker,
+            );
             pre_lines = graph_slice.lines.clone();
 
             GraphicCommit {
@@ -103,6 +114,7 @@ fn slice_graph(
     parents: &Vec<String>,
     pre_lines: &Vec<CommitGraphLine>,
     chains: &mut Vec<Chain>,
+    color_picker: &mut ColorPicker,
 ) -> GraphSlice {
     let mut lines = get_current_lines(pre_lines);
 
@@ -116,14 +128,14 @@ fn slice_graph(
     let index_list = get_index_list(chains, hash);
     if index_list.len().eq(&0) {
         // TIPS: first node of a chain
-        commit_color = String::from("red");
+        commit_color = color_picker.get().clone();
         commit_position = chains.len() as u32;
 
         // TODO: if first_parent == None
         if first_parent.is_some() {
             chains.push(Chain {
                 hash: hash.clone(),
-                parent: first_parent.as_deref().unwrap().to_string(),
+                parent: Some(first_parent.as_deref().unwrap().to_string()),
                 color: commit_color.clone(),
             });
         }
@@ -144,6 +156,13 @@ fn slice_graph(
 
         commit_position = first_index as u32;
         commit_color = chains[first_index as usize].color.clone();
+
+        chains[first_index].hash = hash.clone();
+        chains[first_index].parent = if first_parent.is_some() {
+            Some(first_parent.as_deref().unwrap().to_string())
+        } else {
+            None
+        };
 
         let merged_index_list = if parents.len() != 0 {
             other_index_list
@@ -184,7 +203,9 @@ fn slice_graph(
             .unwrap()
             .into_iter()
             .for_each(|parent| {
-                let has_same_parent = chains.into_iter().any(|chain| chain.parent.eq(parent));
+                let has_same_parent = chains
+                    .into_iter()
+                    .any(|chain| chain.parent.as_deref().unwrap().to_string().eq(parent));
                 if has_same_parent {
                     let index_list = get_index_list(chains, parent);
                     if index_list.len() > 0 {
@@ -196,10 +217,10 @@ fn slice_graph(
                         })
                     }
                 } else {
-                    commit_color = String::from("red");
+                    commit_color = color_picker.get().clone();
                     chains.push(Chain {
                         hash: hash.clone(),
-                        parent: parent.clone(),
+                        parent: Some(parent.clone()),
                         color: commit_color.clone(),
                     });
 
@@ -244,7 +265,7 @@ fn get_index_list(chains: &Vec<Chain>, hash: &String) -> Vec<usize> {
     let mut index_list: Vec<usize> = Vec::new();
 
     chains.into_iter().enumerate().for_each(|(index, chain)| {
-        if chain.parent.eq(hash) {
+        if chain.parent.as_deref().unwrap().to_string().eq(hash) {
             index_list.push(index as usize);
         }
     });
