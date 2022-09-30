@@ -120,7 +120,6 @@ fn slice_graph(
 
     let first_parent = parents.get(0);
     let fork_parents = parents.get(1..);
-    web_sys::console::log_1(&"handle parents!".into());
 
     let commit_position: u32;
     let mut commit_color: String;
