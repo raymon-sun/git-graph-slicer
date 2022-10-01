@@ -2,7 +2,7 @@ use color_picker::ColorPicker;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-extern crate web_sys;
+// extern crate web_sys;
 
 mod color_picker;
 
@@ -55,6 +55,13 @@ struct Chain {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Result {
+    graphic_commits: Vec<GraphicCommit>,
+    chains: Vec<Chain>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Example {
     pub field2: Vec<Vec<f32>>,
     pub field3: [f32; 4],
@@ -71,11 +78,17 @@ pub fn greet(name: &str) {
 }
 
 #[wasm_bindgen]
-pub fn attach_graph(val: JsValue) -> JsValue {
-    let original_commits: Vec<Commit> = serde_wasm_bindgen::from_value(val).unwrap();
+pub fn attach_graph(
+    commits_value: JsValue,
+    pre_lines_value: JsValue,
+    chains_value: JsValue,
+) -> JsValue {
+    let original_commits: Vec<Commit> = serde_wasm_bindgen::from_value(commits_value).unwrap();
+    let mut pre_lines: Vec<CommitGraphLine> =
+        serde_wasm_bindgen::from_value(pre_lines_value).unwrap();
+    let mut cur_chains: Vec<Chain> = serde_wasm_bindgen::from_value(chains_value).unwrap();
 
-    let mut cur_chains: Vec<Chain> = Vec::new();
-    let mut pre_lines: Vec<CommitGraphLine> = Vec::new();
+    // web_sys::console::log_1(&"handle arg!".into());
     let mut color_picker = color_picker::ColorPicker::new();
 
     let commits: Vec<GraphicCommit> = original_commits
@@ -106,7 +119,11 @@ pub fn attach_graph(val: JsValue) -> JsValue {
         })
         .collect();
 
-    serde_wasm_bindgen::to_value(&commits).unwrap()
+    serde_wasm_bindgen::to_value(&Result {
+        graphic_commits: commits,
+        chains: cur_chains,
+    })
+    .unwrap()
 }
 
 fn slice_graph(
